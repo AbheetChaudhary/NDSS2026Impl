@@ -5,7 +5,7 @@ dilithium implementation present at [Argyle-Software/dilithium](https://github.c
 The modified code is present in the `dilithium` directory.
 
 The directories `xperiment_mode2`, `xperiment_mode3` and `xperiment_mode5` are
-running the experiments for different levels of dilithium. They compare the
+running the experiments for different levels of dilithium, these are levels that provide 128-bit, 192-bit and 256-bit security respectively. They compare the
 running times of our NO-PKI scheme with a version of dilithium that use PKI infrastructure.
 
 ## Running the benchmarks.
