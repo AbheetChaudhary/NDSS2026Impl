@@ -29,10 +29,6 @@ use crate::{
     nopki::kgc::*,
 };
 
-fn rdtsc() -> u64 {
-    unsafe { core::arch::x86_64::_rdtsc() }
-}
-
 #[derive(Copy, Clone)]
 pub struct PublicKey {
     pub b12_h: Polyveck,
@@ -58,11 +54,7 @@ pub enum KeygenError {
 }
 
 pub fn user_generate_key(
-    // pk:       &mut [u8],
-    // sk:       &mut [u8],
     identity: &[u8],
-    // params:   &[u8],
-    // ppk:      &[u8],
     params:   Params,
     ppk:      PartialPrivateKey,
     seed:     Option<&[u8]>,
@@ -300,13 +292,11 @@ pub fn user_generate_key(
 
         // Check norm of z = (z1 z2)^T
         if polyvecl_chknorm(&z1, (GAMMA1 - BETA) as i32) > 0 {
-            // eprintln!("keygen fail 1: z1 norm");
             retry += 1;
             continue;
         }
 
         if polyvecl_chknorm(&z2, (GAMMA1 - BETA) as i32) > 0 {
-            // eprintln!("keygen fail 1: z2 norm");
             retry += 1;
             continue;
         }
@@ -336,7 +326,6 @@ pub fn user_generate_key(
 
         // Check norm of rpoly_l.
         if polyveck_chknorm(&rpoly_l, (GAMMA2 - BETA) as i32) > 0 {
-            // eprintln!("keygen fail 2: rpoly_l norm");
             retry += 1;
             continue;
         }
@@ -354,7 +343,6 @@ pub fn user_generate_key(
 
         // The infinite norm must be strictly less than 1, ie be 0.
         if polyveck_chknorm(&rh_vh_diff, 1 as i32) > 0 {
-            // eprintln!("keygen fail 3: rpoly_h != v1_full_h");
             retry += 1;
             continue;
         }
@@ -379,7 +367,6 @@ pub fn user_generate_key(
 
         // Check if norm of cb is less than GAMMA2.
         if polyveck_chknorm(&cb, GAMMA2 as i32) > 0 {
-            // eprintln!("keygen fail 4: cb norm");
             retry += 1;
             continue;
         }
@@ -394,16 +381,10 @@ pub fn user_generate_key(
 
         let n = polyveck_make_hint_simple(&mut h, &cb, &hint_from);
         if n > OMEGA as i32 {
-            // eprintln!("keygen fail: h_i vs omega, n: {n}, omega: {OMEGA}");
             retry += 1;
             continue;
         }
-        // println!("OMEGA: {OMEGA}, keygen n: {n}");
 
-        // println!("c1:\n{:?}", c1.coeffs);
-        // println!("c2:\n{:?}", c2.coeffs);
-
-        // println!("v1_h(user keygen):\n{:?}", v1_h.vec[0].coeffs);
         // No packing of pk, just pass plain b12_h and z = (z1 z2)^T
         let pk = PublicKey {
             b12_h, z1, z2, h, c,
@@ -415,12 +396,7 @@ pub fn user_generate_key(
             b11_l, b12_l, y11, y12, s11, s12_prime
         };
 
-        // println!("s11:\n{:?}", s11.vec[0].coeffs);
-        // println!("s12_prime:\n{:?}", s12_prime.vec[0].coeffs);
-
         break Ok((pk, sk));
-
-        // pack_sk
     }
 }
 
@@ -434,7 +410,6 @@ pub struct Signature {
     z_i1: Polyvecl,
     z_i2: Polyvecl,
     h_i:  Polyveck,
-    // c_i:  Polyveck,
     c_i: [u8; SEEDBYTES], // TODO: is c_i a hash or a polynomial?
 }
 
@@ -486,7 +461,6 @@ pub fn generate_signature(
     let mut r_prime = [0u8; R_PRIME_SIZE];
 
     r.copy_from_slice(&seedbuf[..R_SIZE]);
-    // println!("r: {:?}", r);
     r_prime.copy_from_slice(&seedbuf[R_SIZE..]);
 
     // Seed Expansion: mat_a11, mat_a12.
@@ -526,34 +500,6 @@ pub fn generate_signature(
     let mut v1_h = v1;
     let mut v1_l = Polyveck::default();
     polyveck_decompose(&mut v1_h, &mut v1_l);
-
-    /*
-    // Pack bits of v1_h for calculating c
-    let mut v1_h_packed = [0u8; K * POLYW1_PACKEDBYTES];
-
-    // Get coefficients in proper range before packing.
-    polyveck_reduce(&mut v1_h);
-    polyveck_caddq(&mut v1_h);
-
-    polyveck_pack_w1(v1_h_packed.as_mut_slice(), &v1_h);
-
-    let mut c = [0u8; SEEDBYTES];
-
-    let mut state = KeccakState::default();
-    shake256_absorb(&mut state, &r, R_SIZE);
-    shake256_absorb(&mut state, &v1_h_packed, K * POLYW1_PACKEDBYTES);
-    shake256_finalize(&mut state);
-    shake256_squeeze(&mut c, SEEDBYTES, &mut state);
-
-    // Sample c1 and c2 from B_tau and convert them to NTT form.
-    let mut c1 = Poly::default();
-    poly_challenge_nonced(&mut c1, &c, 0);
-    poly_ntt(&mut c1);
-
-    let mut c2 = Poly::default();
-    poly_challenge_nonced(&mut c2, &c, 1);
-    poly_ntt(&mut c2);
-    */
 
     // Compute e11 and e12.
     let mut e11 = b11_h;
@@ -618,42 +564,8 @@ pub fn generate_signature(
         let mut y_i1_hat = y_i1;
         polyvecl_ntt(&mut y_i1_hat);
 
-        /*
-        let mut c = [0u8; SEEDBYTES];
-        randombytes(&mut c, SEEDBYTES);
-
-        let mut c_i_test = Poly::default();
-        poly_challenge_nonced(&mut c_i_test, &c, 0);
-        poly_ntt(&mut c_i_test);
-
-        let mut z_i_test = Polyvecl::default();
-        polyvecl_pointwise_poly_montgomery(&mut z_i_test, &c_i_test, &s11_hat);
-        polyvecl_invntt_tomont(&mut z_i_test);
-        polyvecl_add(&mut z_i_test, &y_i1);
-        polyvecl_reduce(&mut z_i_test);
-
-        if polyvecl_chknorm(&z_i_test, (GAMMA1 - BETA) as i32) > 0 {
-            // println!("z_i_test failed");
-            continue;
-        }
-        */
-
         polyvecl_uniform_gamma1(&mut y_i2, &r_prime, nonce);
         nonce += 1;
-
-        /*
-        let mut z_i_test_bak = Polyvecl::default();
-        polyvecl_pointwise_poly_montgomery(&mut z_i_test_bak, &c_i_test, 
-            &s12_prime_hat);
-        polyvecl_invntt_tomont(&mut z_i_test_bak);
-        polyvecl_add(&mut z_i_test_bak, &y_i2);
-        polyvecl_reduce(&mut z_i_test_bak);
-
-        if polyvecl_chknorm(&z_i_test_bak, (GAMMA1 - BETA) as i32) > 0 {
-            // println!("z_i_test_bak failed");
-            continue;
-        }
-        */
 
         // NTT transform y_i2 for future use.
         let mut y_i2_hat = y_i2;
@@ -673,28 +585,6 @@ pub fn generate_signature(
         // Compute v_i.
         let mut v_i = v_i1;
         polyveck_add(&mut v_i, &v_i2);
-
-        /*
-        let mut r_test = v_i;
-        // let (mut ce1, mut ce2) = (Polyveck::default(), Polyveck::default());
-        // polyveck_pointwise_poly_montgomery(&mut ce1, &c_i_test, &e11_hat);
-        // polyveck_invntt_tomont(&mut ce1);
-        // polyveck_pointwise_poly_montgomery(&mut ce2, &c_i_test, &e12_hat);
-        // polyveck_invntt_tomont(&mut ce2);
-        // polyveck_sub(&mut r_test, &ce1);
-        // polyveck_sub(&mut r_test, &ce2);
-        polyveck_reduce(&mut r_test);
-        polyveck_caddq(&mut r_test);
-
-        let (mut r_test_h, mut r_test_l) = (Polyveck::default(), Polyveck::default());
-        r_test_h = r_test;
-        polyveck_decompose(&mut r_test_h, &mut r_test_l);
-
-        if polyveck_chknorm(&r_test_l, (GAMMA2 - BETA) as i32) > 0 {
-            // println!("r_test_l fail");
-            continue;
-        }
-        */
 
         // Decompose v_i into high and low parts.
         let (mut v_i_h, mut v_i_l) = (Polyveck::default(), Polyveck::default());
@@ -717,15 +607,6 @@ pub fn generate_signature(
 
         let mut c_i = [0u8; SEEDBYTES];
 
-        /*
-        state.init();
-        shake256_absorb(&mut state, &r, R_SIZE);
-        shake256_absorb(&mut state, msg, msg.len());
-        shake256_absorb(&mut state, &v_h_sum_packed, K * POLYW1_PACKEDBYTES);
-        shake256_finalize(&mut state);
-        shake256_squeeze(&mut c_i, SEEDBYTES, &mut state);
-        */
-
         let mut hasher_state = prehashed;
         shake256_absorb(&mut hasher_state, &v_h_sum_packed, K * POLYW1_PACKEDBYTES);
         shake256_finalize(&mut hasher_state);
@@ -735,12 +616,10 @@ pub fn generate_signature(
         let mut c_i1 = Poly::default();
         // poly_challenge_nonced(&mut c_i1, &c_i, 0);
         poly_challenge_nonced(&mut c_i1, &c_i, 0);
-        // println!("c_i1\n{:?}", c_i1.coeffs);
         poly_ntt(&mut c_i1);
 
         let mut c_i2 = Poly::default();
         poly_challenge_nonced(&mut c_i2, &c_i, 1);
-        // println!("c_i2\n{:?}", c_i2.coeffs);
         poly_ntt(&mut c_i2);
 
         let (mut z_i1, mut z_i2) = (Polyvecl::default(), Polyvecl::default());
@@ -749,12 +628,9 @@ pub fn generate_signature(
         polyvecl_invntt_tomont(&mut z_i1);
         polyvecl_add(&mut z_i1, &y_i1);
         polyvecl_reduce(&mut z_i1);
-        // println!("z_i1:\n{:?}", z_i1.vec[0].coeffs);
-        // println!("s11_c_i1\n{:?}\n", z_i1.vec[0].coeffs);
 
         // Check norm of z_i1.
         if polyvecl_chknorm(&z_i1, (GAMMA1 - BETA) as i32) > 0 {
-            // eprintln!("sig fail 1: z_i1");
             retry += 1;
             fail_reason.z_i1 += 1;
             continue;
@@ -764,12 +640,9 @@ pub fn generate_signature(
         polyvecl_invntt_tomont(&mut z_i2);
         polyvecl_add(&mut z_i2, &y_i2);
         polyvecl_reduce(&mut z_i2);
-        // println!("y_i2:\n{:?}", y_i2.vec[0].coeffs);
-        // println!("s12_prime_c_i2\n{:?}\n", z_i2.vec[0].coeffs);
 
         // Check norm of z_i2.
         if polyvecl_chknorm(&z_i2, (GAMMA1 - BETA) as i32) > 0 {
-            // eprintln!("sig fail 1: z_i2");
             retry += 1;
             fail_reason.z_i2 += 1;
             continue;
@@ -799,7 +672,6 @@ pub fn generate_signature(
 
         // Check norm of r_i_poly_l
         if polyveck_chknorm(&r_i_poly_l, (GAMMA2 - BETA) as i32) > 0 {
-            // eprintln!("sig fail 2: r_i_poly_l");
             retry += 1;
             fail_reason.r_i_l += 1;
             continue;
@@ -811,7 +683,6 @@ pub fn generate_signature(
         polyveck_reduce(&mut rih_vih_diff);
 
         if polyveck_chknorm(&rih_vih_diff, 1 as i32) > 0 {
-            // eprintln!("sig fail 3: rih_vih_diff");
             retry += 1;
             fail_reason.rih_vih += 1;
             continue;
@@ -835,7 +706,6 @@ pub fn generate_signature(
 
         // Check norm of cib
         if polyveck_chknorm(&cib, 2 * GAMMA2_I32) > 0 {
-            // eprintln!("sig fail 4: cib norm");
             retry += 1;
             fail_reason.cb += 1;
             continue;
@@ -851,17 +721,10 @@ pub fn generate_signature(
         let n = polyveck_make_hint_simple(&mut h_i, &cib, &hint_from);
 
         if n > OMEGA as i32 {
-            // eprintln!("sig fail 5: h_i vs omega, n: {n}, omega: {OMEGA}");
             retry += 1;
             fail_reason.omega += 1;
             continue;
         }
-        // println!("OMEGA: {OMEGA}, sig n: {n}");
-
-        // println!("c_i1:\n{:?}", c_i1.coeffs);
-        // println!("c_i2:\n{:?}", c_i2.coeffs);
-
-        // println!("v_i_h(signature):\n{:?}", v_i_h.vec[0].coeffs);
 
         let signature = Signature {
             z_i1,
@@ -870,12 +733,6 @@ pub fn generate_signature(
             c_i,
         };
 
-        // println!("v_h_sum: {:?}", v_h_sum.vec[0].coeffs);
-        // println!("v_h_sum(signature): {:?}", v_h_sum.vec[0].coeffs);
-        // println!("r: {:?}", r);
-
-        // println!("NOPKI: retry count {}", retry);
-        // println!("{:#?}", fail_reason);
         break Ok(signature);
     }
 }
@@ -945,9 +802,6 @@ pub fn verify_sign(
     poly_challenge_nonced(&mut c2, &c, 1);
     poly_ntt(&mut c2);
 
-    // println!("c1: {:?}", c1.coeffs);
-    // println!("c2: {:?}", c2.coeffs);
-
     // Do the same thing for c_i1 and c_i2 using c_i
     let mut c_i1 = Poly::default();
     poly_challenge_nonced(&mut c_i1, &c_i, 0);
@@ -959,22 +813,18 @@ pub fn verify_sign(
 
     // Check whether z and z_i have correct norms.
     if polyvecl_chknorm(&z1, (GAMMA1 - BETA) as i32) > 0 {
-        // eprintln!("verify fail: z1 norm");
         return false;
     }
 
     if polyvecl_chknorm(&z2, (GAMMA1 - BETA) as i32) > 0 {
-        // eprintln!("verify fail: z2 norm");
         return false;
     }
 
     if polyvecl_chknorm(&z_i1, (GAMMA1 - BETA) as i32) > 0 {
-        // eprintln!("verify fail: z_i1 norm");
         return false;
     }
 
     if polyvecl_chknorm(&z_i2, (GAMMA1 - BETA) as i32) > 0 {
-        // eprintln!("verify fail: z_i2 norm");
         return false;
     }
 
@@ -991,8 +841,6 @@ pub fn verify_sign(
 
     let mut cb = c1_b11_h;
     polyveck_add(&mut cb, &c2_b12_h);
-    // polyveck_reduce(&mut cb);
-    // polyveck_caddq(&mut cb);
 
     let mut c_i1_b11_h = Polyveck::default();
     polyveck_pointwise_poly_montgomery(&mut c_i1_b11_h, &c_i1, &b11_h_hat);
@@ -1006,8 +854,6 @@ pub fn verify_sign(
 
     let mut cib = c_i1_b11_h;
     polyveck_add(&mut cib, &c_i2_b12_h);
-    // polyveck_reduce(&mut cib);
-    // polyveck_caddq(&mut cib);
 
     // Calculate product of A's and z's for v1 and v_i_prime.
 
@@ -1050,14 +896,9 @@ pub fn verify_sign(
     let mut v1_prime = Polyveck::default();
     polyveck_use_hint_simple(&mut v1_prime, &h, &prehint1);
 
-    // println!("v1_prime:\n{:?}", v1_prime.vec[0].coeffs);
-    // println!("SANITY CHECK PASSES");
-
     // Use hint on v_i_prime
     let mut v_i_prime = Polyveck::default();
     polyveck_use_hint_simple(&mut v_i_prime, &h_i, &prehint_i);
-
-    // println!("v_i_prime:\n{:?}", v_i_prime.vec[0].coeffs);
 
     // Sum v1 and v_i_prime.
     let mut v_sum = v1_prime;
@@ -1066,14 +907,8 @@ pub fn verify_sign(
     polyveck_reduce(&mut v_sum);
     polyveck_caddq(&mut v_sum);
 
-    // println!("v_sum:\n{:?}", v_sum.vec[0].coeffs);
-
-    // println!("v_sum_prime: {:?}", v_sum.vec[0].coeffs);
-    // println!("r: {:?}", r);
-
     let mut v_sum_packed = [0u8; K * POLYW1_PACKEDBYTES];
     polyveck_pack_w1(v_sum_packed.as_mut_slice(), &v_sum);
-    // println!("v_sum_packed(verify): {:?}", v_sum_packed);
 
     let mut final_hash = [0u8; SEEDBYTES];
 
@@ -1084,12 +919,7 @@ pub fn verify_sign(
     shake256_finalize(&mut state);
     shake256_squeeze(&mut final_hash, SEEDBYTES, &mut state);
 
-    // TODO: check number of 1's in h and h_i.
-
     if c_i != final_hash {
-        // eprintln!("final hash differs!");
-        // eprintln!("c_i:\n{:?}", c_i);
-        // eprintln!("final_hash:\n{:?}", final_hash);
         return false;
     }
 
