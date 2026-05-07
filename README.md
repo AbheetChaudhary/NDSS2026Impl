@@ -5,8 +5,8 @@ dilithium implementation present at [Argyle-Software/dilithium](https://github.c
 The modified code is present in the `dilithium` directory.
 
 The directories `xperiment_mode2`, `xperiment_mode3` and `xperiment_mode5` are
-running the experiments for different levels of dilithium, these are levels that provide 128-bit, 192-bit and 256-bit security respectively. They compare the
-running times of our NO-PKI scheme with a version of dilithium that use PKI infrastructure.
+running the experiments for different levels of security, respectively 128-bit, 192-bit and 256-bit of security. We compare the
+running times of our proposed Certificateless Signature Scheme, as printed `NOPKI` in the console, with that of a version of dilithium that use PKI infrastructure, as printed `PKI` in the console.
 
 ## Running the benchmarks.
 To run the benchmark for any level of dilithim just go to that respective mode's
@@ -26,14 +26,14 @@ The above command will print something like this.
 ```
 ----------------------------- NOPKI Dilithium-3 ---------------------------
 ppk elapsed: 106 us
-keygen elapsed: 721 us
-sig elapsed: 1527 us
-verify elapsed: 259 us
+keygen elapsed: 588 us
+sig elapsed: 926 us
+verify elapsed: 260 us
 total runs: 1000, verification success: 1000
 ----------------------------- PKI Dilithium-3 -----------------------------
 keygen elapsed: 101 us
-sig elapsed: 347 us
-verify elapsed: 93 us
+sig elapsed: 338 us
+verify elapsed: 94 us
 total runs: 1000, verification success: 1000
 ```
 
